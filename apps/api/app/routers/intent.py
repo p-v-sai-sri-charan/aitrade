@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from ai_providers import TradeIntentInput
 from app.audit import write_audit_log
-from app.deps import AIProviderDep, DbSession
+from app.deps import AIProviderDep, DbSession, InstrumentRepositoryDep
 from app.instrument_resolver import resolve_symbol
 from app.schemas import IntentParseResponse, TradeIntentInputSchema, TradeIntentSchema
 from app.security import sanitize_text
@@ -16,7 +16,10 @@ router = APIRouter(prefix="/intent", tags=["intent"])
 
 @router.post("/parse", response_model=IntentParseResponse)
 async def parse_intent(
-    payload: TradeIntentInputSchema, db: DbSession, ai_provider: AIProviderDep
+    payload: TradeIntentInputSchema,
+    db: DbSession,
+    ai_provider: AIProviderDep,
+    instruments: InstrumentRepositoryDep,
 ) -> IntentParseResponse:
     transcript = sanitize_text(payload.transcript)
 
@@ -33,7 +36,7 @@ async def parse_intent(
     intent_schema = TradeIntentSchema.model_validate(asdict(result.intent))
 
     if intent_schema.intent == "PLACE_ORDER" and intent_schema.symbol:
-        resolved = resolve_symbol(intent_schema.symbol)
+        resolved = await resolve_symbol(intent_schema.symbol, instruments)
         if resolved.ambiguous_candidates:
             intent_schema.ambiguous_symbol_candidates = [
                 f"{c.symbol} - {c.company_name}" for c in resolved.ambiguous_candidates

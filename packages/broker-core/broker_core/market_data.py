@@ -61,17 +61,30 @@ def get_last_price(symbol: str) -> float | None:
     return round(base * (1 + jitter_pct / 100), 2)
 
 
-def get_quote(symbol: str) -> Quote | None:
-    instrument = get_instrument(symbol)
+def get_quote(symbol: str, company_name: str = "") -> Quote | None:
     base = SEED_PRICES.get(symbol.upper())
-    if instrument is None or base is None:
+    if base is None:
         return None
+    instrument = get_instrument(symbol)
+    resolved_name = company_name or (instrument.company_name if instrument else symbol.upper())
     last_price = get_last_price(symbol) or base
     change_pct = round((last_price - base) / base * 100, 2)
     return Quote(
-        symbol=instrument.symbol,
-        company_name=instrument.company_name,
+        symbol=symbol.upper(),
+        company_name=resolved_name,
         last_price=last_price,
         previous_close=base,
         change_pct=change_pct,
     )
+
+
+class SeededMarketDataProvider:
+    """Wraps the seeded/jittered prices above as a `MarketDataProvider`.
+    Always available, no network -- the default and the fallback source.
+    Only covers the ~20 symbols in `SEED_PRICES`.
+    """
+
+    source = "mock"
+
+    async def get_quote(self, symbol: str, company_name: str = "") -> Quote | None:
+        return get_quote(symbol, company_name)

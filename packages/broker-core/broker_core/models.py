@@ -48,11 +48,34 @@ class OrderRecord:
 
 @dataclass
 class PositionRecord:
+    """Persisted position state (what a `BrokerStore` reads/writes) --
+    deliberately has no market-price-dependent fields, since those are a
+    point-in-time computation, not stored state.
+    """
+
     symbol: str
     company_name: str
     quantity: int
     average_price: float
     realized_pnl: float = 0.0
+
+
+@dataclass
+class EnrichedPosition:
+    """A `PositionRecord` enriched with a current market price snapshot --
+    what `PaperBroker.get_positions()` / `get_portfolio()` actually return.
+    Computed fresh on every call from whichever `MarketDataProvider` is
+    configured (seeded or live).
+    """
+
+    symbol: str
+    company_name: str
+    quantity: int
+    average_price: float
+    current_price: float
+    unrealized_pnl: float
+    unrealized_pnl_pct: float
+    realized_pnl: float
 
 
 @dataclass
@@ -64,4 +87,4 @@ class PortfolioSnapshot:
     day_pnl: float
     day_pnl_pct: float
     total_pnl: float
-    positions: list[PositionRecord] = field(default_factory=list)
+    positions: list[EnrichedPosition] = field(default_factory=list)

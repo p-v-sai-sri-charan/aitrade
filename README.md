@@ -128,11 +128,47 @@ See [`.env.example`](./.env.example) for the full list. Key variables:
 | `AI_PROVIDER` | `mock` \| `anthropic` \| `openai` \| `gemini` \| `local` \| `ollama` |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` | Only needed for the matching provider. **Backend-only, never sent to the frontend.** |
 | `LOCAL_AI_BASE_URL` / `OLLAMA_BASE_URL` | Point at a self-hosted OpenAI-compatible server or Ollama instance |
+| `MARKET_DATA_PROVIDER` | `mock` (seeded/offline, default) \| `yahoo` (live-ish prices for any NSE symbol, no API key -- see [Market data & instrument universe](#market-data--instrument-universe)) |
+| `INSTRUMENT_SOURCE` | `seeded` (curated ~20-stock list, default) \| `nse` (auto-fetches the full NSE-listed equity universe) |
 | `DATABASE_URL` | SQLAlchemy connection string (Postgres in Docker; SQLite works for local hacking) |
 | `RISK_MAX_ORDER_VALUE`, `RISK_MAX_QUANTITY`, `RISK_MAX_PRICE_DEVIATION_PCT`, `RISK_DAILY_LOSS_LIMIT` | Default risk limits (also editable per-session in Settings) |
 | `TRADING_KILL_SWITCH` | Set `true` to block all order placement |
 | `PAPER_STARTING_BALANCE`, `PAPER_SLIPPAGE_BPS`, `PAPER_BROKERAGE_FLAT`, `PAPER_STT_RATE_SELL`, `PAPER_GST_RATE` | Paper broker simulation parameters |
 | `VITE_API_BASE_URL`, `VITE_WS_BASE_URL` | Frontend-only, no secrets |
+
+## Market data & instrument universe
+
+By default VaaniTrade runs fully offline: a seeded list of ~20 NSE stocks
+(`INSTRUMENT_SOURCE=seeded`) with jittered mock prices
+(`MARKET_DATA_PROVIDER=mock`). Two opt-in sources auto-fetch the real thing
+instead, each behind the same interface so nothing else in the app changes:
+
+- **`INSTRUMENT_SOURCE=nse`** -- fetches NSE's public equity list CSV
+  (`broker_core/instrument_repository_live.py`) to resolve/search across
+  the full NSE-listed universe instead of the curated 20. Cached in memory
+  with a TTL (`INSTRUMENT_CACHE_TTL_SECONDS`, default 24h).
+- **`MARKET_DATA_PROVIDER=yahoo`** -- fetches live-ish quotes for any NSE
+  symbol from Yahoo Finance's public chart endpoint, no API key needed
+  (`broker_core/market_data_live.py`). Cached briefly
+  (`MARKET_DATA_CACHE_TTL_SECONDS`, default 5s) to avoid hammering it.
+
+Both are **best-effort, unofficial, free-tier data sources** -- not a
+licensed feed. If a fetch fails (network blocked, rate-limited, endpoint
+changed), the app logs a warning and falls back to the seeded data instead
+of crashing; it never silently executes an order on missing price data
+(orders without a resolvable quote are rejected with a clear reason). Swap
+either seam for a licensed vendor / your broker's market-data API in
+production by implementing `MarketDataProvider` or `InstrumentRepository`.
+
+The Settings screen shows the active source, instrument count, and last
+refresh time, with a manual "Refresh instrument list now" button.
+
+**What this intentionally does *not* do:** suggest what to buy or sell.
+Auto-fetching more tickers and real prices is a data-completeness
+improvement; recommending trades is a different feature this project
+deliberately excludes (see [Core principles](#why-its-built-this-way) and
+[`SECURITY.md`](./SECURITY.md)) -- in India, that crosses into SEBI
+Registered Investment Advisor / Research Analyst territory.
 
 ## API
 
@@ -148,6 +184,9 @@ GET  /api/v1/orders
 GET  /api/v1/portfolio
 GET  /api/v1/positions
 GET  /api/v1/quotes/{symbol}
+GET  /api/v1/instruments/search?q=...
+GET  /api/v1/instruments/status
+POST /api/v1/instruments/refresh
 GET  /api/v1/audit-logs
 GET  /api/v1/settings
 PUT  /api/v1/settings
@@ -184,6 +223,11 @@ cd apps/web && npx playwright install --with-deps chromium && npm run test:e2e
   (`packages/broker-core/broker_core/adapter.py`) and swap it in via
   `apps/api/app/deps.py::get_broker`. `PaperBroker` remains the safe
   default.
+- **Add a market data or instrument source**: implement `MarketDataProvider`
+  or `InstrumentRepository` (`packages/broker-core/broker_core/market_data_provider.py`
+  / `instrument_repository.py`) and register it in their `create_*` factory.
+  `PaperBroker` only ever depends on the interfaces, so a licensed vendor
+  drops in without touching order/risk logic.
 - **Add a risk rule**: add a pure function to
   `packages/risk-engine/risk_engine/rules.py` and register it in
   `ALL_RULES`; it is unit-testable with no DB or network involved.

@@ -6,6 +6,11 @@ immediately if the market already satisfies the limit, otherwise stay
 PENDING. Brokerage is a flat fee; taxes approximate STT (sell side) and GST
 on brokerage. This is a simplification for demo/education purposes, not a
 real settlement engine.
+
+Price and instrument lookups go through the injected `MarketDataProvider`
+and `InstrumentRepository` -- both default to the offline seeded
+implementations, but can be swapped for a live feed / the full NSE
+instrument universe without changing any of the order logic below.
 """
 
 from __future__ import annotations
@@ -13,8 +18,11 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from broker_core import market_data
+from broker_core.instrument_repository import InstrumentRepository, SeededInstrumentRepository
+from broker_core.market_data import Quote, SeededMarketDataProvider
+from broker_core.market_data_provider import MarketDataProvider
 from broker_core.models import (
+    EnrichedPosition,
     OrderRecord,
     OrderRequest,
     PortfolioSnapshot,
@@ -39,12 +47,22 @@ def _now() -> datetime:
 class PaperBroker:
     """Implements the `BrokerAdapter` protocol (structurally, via duck typing)."""
 
-    def __init__(self, store: BrokerStore, config: PaperBrokerConfig | None = None) -> None:
+    def __init__(
+        self,
+        store: BrokerStore,
+        config: PaperBrokerConfig | None = None,
+        market_data: MarketDataProvider | None = None,
+        instruments: InstrumentRepository | None = None,
+    ) -> None:
         self.store = store
         self.config = config or PaperBrokerConfig()
+        self.market_data = market_data or SeededMarketDataProvider()
+        self.instruments = instruments or SeededInstrumentRepository()
 
-    async def get_quote(self, symbol: str) -> market_data.Quote | None:
-        return market_data.get_quote(symbol)
+    async def get_quote(self, symbol: str) -> Quote | None:
+        instrument = await self.instruments.get(symbol)
+        company_name = instrument.company_name if instrument else ""
+        return await self.market_data.get_quote(symbol, company_name)
 
     def _execution_price(self, order: OrderRequest, last_price: float) -> float | None:
         """Return the fill price if the order fills now, else None (stays PENDING)."""
@@ -67,7 +85,7 @@ class PaperBroker:
         now = _now()
         order_id = str(uuid.uuid4())
 
-        quote = market_data.get_quote(order.symbol)
+        quote = await self.market_data.get_quote(order.symbol, order.company_name)
         if quote is None:
             record = OrderRecord(
                 id=order_id,
@@ -258,18 +276,36 @@ class PaperBroker:
     async def get_orders(self) -> list[OrderRecord]:
         return self.store.list_orders()
 
-    async def get_positions(self) -> list[PositionRecord]:
-        return self.store.list_positions()
+    async def _enrich(self, positions: list[PositionRecord]) -> list[EnrichedPosition]:
+        enriched: list[EnrichedPosition] = []
+        for p in positions:
+            quote = await self.market_data.get_quote(p.symbol, p.company_name)
+            current_price = quote.last_price if quote else p.average_price
+            unrealized_pnl = (current_price - p.average_price) * p.quantity
+            invested = p.average_price * p.quantity
+            unrealized_pnl_pct = (unrealized_pnl / invested * 100) if invested else 0.0
+            enriched.append(
+                EnrichedPosition(
+                    symbol=p.symbol,
+                    company_name=p.company_name,
+                    quantity=p.quantity,
+                    average_price=p.average_price,
+                    current_price=round(current_price, 2),
+                    unrealized_pnl=round(unrealized_pnl, 2),
+                    unrealized_pnl_pct=round(unrealized_pnl_pct, 2),
+                    realized_pnl=round(p.realized_pnl, 2),
+                )
+            )
+        return enriched
+
+    async def get_positions(self) -> list[EnrichedPosition]:
+        return await self._enrich(self.store.list_positions())
 
     async def get_portfolio(self) -> PortfolioSnapshot:
-        positions = self.store.list_positions()
+        positions = await self._enrich(self.store.list_positions())
         total_invested = sum(p.quantity * p.average_price for p in positions)
-        market_value = 0.0
-        unrealized_pnl = 0.0
-        for p in positions:
-            last_price = market_data.get_last_price(p.symbol) or p.average_price
-            market_value += p.quantity * last_price
-            unrealized_pnl += (last_price - p.average_price) * p.quantity
+        market_value = sum(p.quantity * p.current_price for p in positions)
+        unrealized_pnl = sum(p.unrealized_pnl for p in positions)
 
         realized_today = self.store.get_realized_pnl_today()
         day_pnl = realized_today + unrealized_pnl

@@ -8,8 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from broker_core import compute_charges, resolve_instrument
-from broker_core.market_data import get_quote
+from broker_core import compute_charges
 from broker_core.models import OrderRequest
 from broker_core.paper_broker import PaperBroker
 from broker_core.pricing import PaperBrokerConfig
@@ -45,8 +44,14 @@ async def evaluate_order(
     trading_kill_switch_active: bool,
     paper_config: PaperBrokerConfig,
 ) -> OrderEvaluation:
-    resolved = resolve_instrument(input.symbol)
-    quote = get_quote(resolved.instrument.symbol) if resolved.instrument else None
+    # Resolve against the same InstrumentRepository / MarketDataProvider the
+    # broker itself uses, so preview, confirm, and the actual fill all agree.
+    resolved = await broker.instruments.resolve(input.symbol)
+    quote = (
+        await broker.market_data.get_quote(resolved.instrument.symbol, resolved.instrument.company_name)
+        if resolved.instrument
+        else None
+    )
     market_price = quote.last_price if quote else None
 
     balance = broker.store.get_balance()

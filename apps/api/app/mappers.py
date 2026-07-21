@@ -1,12 +1,19 @@
-"""Converts broker-core dataclasses into API response schemas."""
+"""Converts broker-core dataclasses into API response schemas.
+
+Pure, synchronous mapping only -- `EnrichedPosition` already carries its
+current-price/unrealized-P&L snapshot (computed once inside
+`PaperBroker.get_positions()`/`get_portfolio()` from whichever
+`MarketDataProvider` is configured), so this layer never needs to make its
+own market-data call.
+"""
 
 from __future__ import annotations
 
-from broker_core import market_data
-from broker_core.models import OrderRecord, PortfolioSnapshot, PositionRecord
-from broker_core.market_data import Quote as BrokerQuote
-from app.schemas import OrderSchema, PortfolioSchema, PositionSchema, QuoteSchema
 from datetime import datetime, timezone
+
+from broker_core.market_data import Quote as BrokerQuote
+from broker_core.models import EnrichedPosition, OrderRecord, PortfolioSnapshot
+from app.schemas import OrderSchema, PortfolioSchema, PositionSchema, QuoteSchema
 
 
 def order_to_schema(order: OrderRecord) -> OrderSchema:
@@ -32,20 +39,16 @@ def order_to_schema(order: OrderRecord) -> OrderSchema:
     )
 
 
-def position_to_schema(position: PositionRecord) -> PositionSchema:
-    current_price = market_data.get_last_price(position.symbol) or position.average_price
-    unrealized_pnl = (current_price - position.average_price) * position.quantity
-    invested = position.average_price * position.quantity
-    unrealized_pnl_pct = (unrealized_pnl / invested * 100) if invested else 0.0
+def position_to_schema(position: EnrichedPosition) -> PositionSchema:
     return PositionSchema(
         symbol=position.symbol,
         companyName=position.company_name,
         quantity=position.quantity,
         averagePrice=position.average_price,
-        currentPrice=round(current_price, 2),
-        unrealizedPnl=round(unrealized_pnl, 2),
-        unrealizedPnlPct=round(unrealized_pnl_pct, 2),
-        realizedPnl=round(position.realized_pnl, 2),
+        currentPrice=position.current_price,
+        unrealizedPnl=position.unrealized_pnl,
+        unrealizedPnlPct=position.unrealized_pnl_pct,
+        realizedPnl=position.realized_pnl,
     )
 
 

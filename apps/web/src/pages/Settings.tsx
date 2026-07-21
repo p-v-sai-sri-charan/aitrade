@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AppShell } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { useInstrumentStatus, useRefreshInstruments } from "../hooks/useInstruments";
 import { useResetPaperTrading, useSettings, useUpdateSettings } from "../hooks/useSettings";
 
 const settingsSchema = z.object({
@@ -24,6 +25,8 @@ export default function Settings() {
   const settingsQuery = useSettings();
   const updateSettings = useUpdateSettings();
   const resetPaperTrading = useResetPaperTrading();
+  const instrumentStatus = useInstrumentStatus();
+  const refreshInstruments = useRefreshInstruments();
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [savedMessage, setSavedMessage] = useState(false);
 
@@ -171,6 +174,45 @@ export default function Settings() {
           {updateSettings.isPending ? "Saving..." : savedMessage ? "Saved" : "Save settings"}
         </Button>
       </form>
+
+      <Card title="Market data">
+        {instrumentStatus.isLoading && <p className="text-sm text-slate-500">Loading...</p>}
+        {instrumentStatus.data && (
+          <div className="space-y-1 text-sm">
+            <p>
+              <span className="text-slate-500">Instrument source:</span>{" "}
+              <span className="font-medium">
+                {instrumentStatus.data.source === "nse" ? "Live (NSE full universe)" : "Seeded (offline)"}
+              </span>
+            </p>
+            <p>
+              <span className="text-slate-500">Instruments available:</span>{" "}
+              <span className="font-medium">{instrumentStatus.data.instrumentCount}</span>
+            </p>
+            <p>
+              <span className="text-slate-500">Last refreshed:</span>{" "}
+              <span className="font-medium">
+                {instrumentStatus.data.lastRefreshedAt
+                  ? new Date(instrumentStatus.data.lastRefreshedAt).toLocaleString()
+                  : "Never (using seeded fallback)"}
+              </span>
+            </p>
+          </div>
+        )}
+        <p className="mt-2 text-xs text-slate-500">
+          The instrument list and live price source (seeded vs. NSE/Yahoo) are configured on the server
+          via <code>INSTRUMENT_SOURCE</code> and <code>MARKET_DATA_PROVIDER</code>. This never suggests
+          what to buy or sell -- it only controls where prices and tickers come from.
+        </p>
+        <Button
+          variant="secondary"
+          className="mt-3 w-full"
+          onClick={() => refreshInstruments.mutate()}
+          disabled={refreshInstruments.isPending}
+        >
+          {refreshInstruments.isPending ? "Refreshing..." : "Refresh instrument list now"}
+        </Button>
+      </Card>
 
       <Card title="Paper trading reset">
         <p className="text-sm text-slate-500">

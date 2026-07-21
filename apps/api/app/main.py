@@ -9,7 +9,17 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.db import SessionLocal, init_db
-from app.routers import audit_logs, intent, orders, portfolio, positions, quotes, settings as settings_router, websocket
+from app.routers import (
+    audit_logs,
+    instruments,
+    intent,
+    orders,
+    portfolio,
+    positions,
+    quotes,
+    settings as settings_router,
+    websocket,
+)
 from app.seed import seed_demo_data
 from app.security import configure_cors
 
@@ -51,6 +61,7 @@ app.include_router(orders.router, prefix=API_PREFIX)
 app.include_router(portfolio.router, prefix=API_PREFIX)
 app.include_router(positions.router, prefix=API_PREFIX)
 app.include_router(quotes.router, prefix=API_PREFIX)
+app.include_router(instruments.router, prefix=API_PREFIX)
 app.include_router(audit_logs.router, prefix=API_PREFIX)
 app.include_router(settings_router.router, prefix=API_PREFIX)
 app.include_router(websocket.router, prefix="/ws")

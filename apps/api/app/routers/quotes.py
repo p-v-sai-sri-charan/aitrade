@@ -11,10 +11,17 @@ router = APIRouter(prefix="/quotes", tags=["quotes"])
 
 @router.get("/{symbol}", response_model=QuoteSchema)
 async def get_quote(symbol: str, broker: BrokerDep) -> QuoteSchema:
-    quote = await broker.get_quote(symbol)
-    if quote is None:
+    instrument = await broker.instruments.get(symbol)
+    if instrument is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"'{symbol}' is not a recognised NSE instrument.",
+        )
+
+    quote = await broker.market_data.get_quote(instrument.symbol, instrument.company_name)
+    if quote is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Market data for '{instrument.symbol}' is temporarily unavailable. Please try again shortly.",
         )
     return quote_to_schema(quote)

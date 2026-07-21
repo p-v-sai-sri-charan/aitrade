@@ -28,3 +28,15 @@ export interface Quote {
   changePct: number;
   updatedAt: string;
 }
+
+export interface Instrument {
+  symbol: string;
+  companyName: string;
+  exchange: "NSE";
+}
+
+export interface InstrumentStatus {
+  source: string;
+  instrumentCount: number;
+  lastRefreshedAt: string | null;
+}

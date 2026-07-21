@@ -54,6 +54,20 @@ class Settings(BaseSettings):
     paper_stt_rate_sell: float = 0.00025
     paper_gst_rate: float = 0.18
 
+    # "mock" is the seeded/jittered ~20-stock price list (offline, default).
+    # "yahoo" fetches live-ish prices for any NSE symbol from Yahoo Finance's
+    # public chart endpoint (no API key, but not a licensed feed -- see
+    # broker_core/market_data_live.py).
+    market_data_provider: str = "mock"
+    market_data_cache_ttl_seconds: float = 5.0
+
+    # "seeded" is the small curated ~20-stock instrument list (offline,
+    # default). "nse" auto-fetches the full NSE-listed equity universe from
+    # NSE's public equity list CSV, cached and refreshed periodically -- see
+    # broker_core/instrument_repository_live.py.
+    instrument_source: str = "seeded"
+    instrument_cache_ttl_seconds: float = 86_400
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

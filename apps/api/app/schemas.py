@@ -161,6 +161,21 @@ class QuoteSchema(CamelModel):
     updated_at: datetime
 
 
+# ---- Instruments ----
+
+
+class InstrumentSchema(CamelModel):
+    symbol: str
+    company_name: str
+    exchange: Literal["NSE"]
+
+
+class InstrumentStatusSchema(CamelModel):
+    source: str
+    instrument_count: int
+    last_refreshed_at: Optional[datetime] = None
+
+
 # ---- Audit log ----
 
 
