@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vaanitrade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vaanitrade_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-vaanitrade}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vaanitrade}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-vaanitrade}:${POSTGRES_PASSWORD:-vaanitrade_dev_password}@db:5432/${POSTGRES_DB:-vaanitrade}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      LOCAL_AI_BASE_URL: ${LOCAL_AI_BASE_URL:-http://localhost:8080/v1}
+      LOCAL_AI_MODEL: ${LOCAL_AI_MODEL:-local-model}
+      LOCAL_AI_API_KEY: ${LOCAL_AI_API_KEY:-not-needed}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
+      RISK_MAX_ORDER_VALUE: ${RISK_MAX_ORDER_VALUE:-200000}
+      RISK_MAX_QUANTITY: ${RISK_MAX_QUANTITY:-5000}
+      RISK_MAX_PRICE_DEVIATION_PCT: ${RISK_MAX_PRICE_DEVIATION_PCT:-5}
+      RISK_DAILY_LOSS_LIMIT: ${RISK_DAILY_LOSS_LIMIT:-25000}
+      RISK_DUPLICATE_ORDER_WINDOW_SECONDS: ${RISK_DUPLICATE_ORDER_WINDOW_SECONDS:-10}
+      TRADING_KILL_SWITCH: ${TRADING_KILL_SWITCH:-false}
+      PAPER_STARTING_BALANCE: ${PAPER_STARTING_BALANCE:-1000000}
+      PAPER_SLIPPAGE_BPS: ${PAPER_SLIPPAGE_BPS:-5}
+      PAPER_BROKERAGE_FLAT: ${PAPER_BROKERAGE_FLAT:-20}
+      PAPER_STT_RATE_SELL: ${PAPER_STT_RATE_SELL:-0.00025}
+      PAPER_GST_RATE: ${PAPER_GST_RATE:-0.18}
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+        VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-ws://localhost:8000/ws}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5173:4173"
+
+volumes:
+  postgres-data:

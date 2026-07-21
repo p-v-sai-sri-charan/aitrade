@@ -1,0 +1,10 @@
+{
+  "name": "@vaanitrade/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript types for VaaniTrade (frontend + future React Native app).",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "license": "MIT"
+}

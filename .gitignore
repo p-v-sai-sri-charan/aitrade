@@ -1,0 +1,41 @@
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+
+# Coverage
+coverage/
+htmlcov/
+
+# DB
+*.sqlite3
+*.db
+postgres-data/

@@ -1,0 +1,19 @@
+{
+  "name": "vaanitrade",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open-source, mobile-first, voice-enabled Indian paper-trading assistant.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/web",
+    "packages/shared-types",
+    "packages/voice"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace apps/web",
+    "build:web": "npm run build --workspace apps/web",
+    "test:web": "npm run test --workspace apps/web",
+    "test:e2e": "npm run test:e2e --workspace apps/web",
+    "lint:web": "npm run lint --workspace apps/web"
+  }
+}

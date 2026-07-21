@@ -1,0 +1,10 @@
+{
+  "name": "@vaanitrade/voice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VoiceService abstraction with a Web Speech API browser implementation. Swap the implementation for Capacitor/React Native speech plugins without touching UI code.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "license": "MIT"
+}
